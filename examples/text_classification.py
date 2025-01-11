@@ -4,7 +4,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import torch
 import torch.nn as nn
 from cfdnet.models import CFDNet
-from cfdnet.utils import save_model, load_model
 
 # Model configuration
 vocab_size = 5000  # Size of the vocabulary (number of unique tokens)
@@ -20,16 +19,22 @@ model = CFDNet(vocab_size=vocab_size, d_model=d_model, num_layers=num_layers, ma
 class ClassificationHead(nn.Module):
     def __init__(self, d_model, num_classes):
         super(ClassificationHead, self).__init__()
-        self.cfdnet = model
+        self.cfdnet = CFDNet(vocab_size, d_model, num_layers, max_seq_len)
         self.classifier = nn.Linear(d_model, num_classes)
 
     def forward(self, x):
-        # Forward pass through the CFDNet model
-        features = self.cfdnet(x)
-        # Take the mean of the feature representations along the sequence length dimension
-        pooled_features = features.mean(dim=1)
+        # Forward pass through the CFDNet model to get feature representations
+        features = self.cfdnet.embedding(x) + self.cfdnet.positional_embedding(torch.arange(x.size(1), device=x.device))
+        
+        # Pass through all blocks without applying the final output layer
+        for block in self.cfdnet.blocks:
+            features = features + block(features)
+        
+        # Pool the features (take the mean of the feature representations along the sequence length dimension)
+        pooled_features = features.mean(dim=1)  # Shape: [batch_size, d_model]
+
         # Classification layer to predict the class logits
-        return self.classifier(pooled_features)
+        return self.classifier(pooled_features)  # Output shape: [batch_size, num_classes]
 
 # Instantiate the classification model
 classification_model = ClassificationHead(d_model=d_model, num_classes=num_classes)
@@ -37,27 +42,8 @@ classification_model = ClassificationHead(d_model=d_model, num_classes=num_class
 # Example input: A batch of 2 sequences, each with length 256 (tokenized text)
 input_seq = torch.randint(0, vocab_size, (2, max_seq_len))
 
-# Forward pass
+# Forward pass through the classification model
 output = classification_model(input_seq)
 
 # Output shape should be [batch_size, num_classes] -> torch.Size([2, 10])
 print("Output shape:", output.size())
-
-# Simulate training: Define loss and optimizer
-labels = torch.randint(0, num_classes, (2,))  # Simulated labels for the 2 sequences
-criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(classification_model.parameters())
-
-# Compute loss
-loss = criterion(output, labels)
-print("Loss:", loss.item())
-
-# Backward pass and optimization step
-loss.backward()
-optimizer.step()
-
-# Save the model
-save_model(classification_model, "classification_model.pth")
-
-# Load the model back (example of model loading)
-loaded_model = load_model(ClassificationHead, "classification_model.pth", d_model, num_classes)
