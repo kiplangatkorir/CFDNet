@@ -14,9 +14,11 @@ class PositionalEmbedding(nn.Module):
         self.max_seq_len = max_seq_len
         self.d_model = d_model
 
-
+        # Learnable spline control points for each position dimension
+        # Shape: (max_seq_len, d_model)
         self.control_points = nn.Parameter(torch.randn(max_seq_len, d_model))
 
+        # Layer normalization for better gradient flow
         self.layer_norm = nn.LayerNorm(d_model)
 
     def forward(self, x):
@@ -32,8 +34,13 @@ class PositionalEmbedding(nn.Module):
         batch_size, seq_len = x.size()
         assert seq_len <= self.max_seq_len, "Sequence length exceeds max_seq_len"
 
-        pos_emb = self.control_points[:seq_len]  
-        pos_emb = pos_emb.unsqueeze(0).expand(batch_size, -1, -1)  
+        # Retrieve positional embeddings for the given sequence length
+        pos_emb = self.control_points[:seq_len]  # Shape: (seq_len, d_model)
+
+        # Expand embeddings to match batch size
+        pos_emb = pos_emb.unsqueeze(0).expand(batch_size, -1, -1)  # Shape: (batch_size, seq_len, d_model)
+
+        # Normalize embeddings
         pos_emb = self.layer_norm(pos_emb)
 
         return pos_emb
