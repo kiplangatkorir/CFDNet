@@ -6,13 +6,14 @@ class SplineFunction(nn.Module):
     def __init__(self, num_control_points):
         super(SplineFunction, self).__init__()
         self.control_points = nn.Parameter(torch.randn(num_control_points))  
-        self.knots = torch.linspace(0, 1, num_control_points).unsqueeze(-1)
+        self.knots = torch.linspace(0, 1, num_control_points).unsqueeze(-1)  
 
     def forward(self, x):
-        x = x.unsqueeze(-1)  
+        x = x.float().unsqueeze(-1)  
         distances = torch.cdist(x, self.knots, p=2)  
         weights = torch.softmax(-distances, dim=-1)  
         return torch.matmul(weights, self.control_points)  
+
 
 class ContinuousPositionalEmbedding(nn.Module):
     def __init__(self, d_model, num_control_points=10):
