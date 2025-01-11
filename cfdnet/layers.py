@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 
 
-# Spline Function Parameterization
 class SplineFunction(nn.Module):
     def __init__(self, num_control_points):
         super(SplineFunction, self).__init__()
