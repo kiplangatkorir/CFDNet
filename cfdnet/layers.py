@@ -5,14 +5,14 @@ import torch.nn as nn
 class SplineFunction(nn.Module):
     def __init__(self, num_control_points):
         super(SplineFunction, self).__init__()
-        self.control_points = nn.Parameter(torch.randn(num_control_points))  # Learnable control points
-        self.knots = torch.linspace(0, 1, num_control_points).unsqueeze(-1)  # Shape (num_control_points, 1)
+        self.control_points = nn.Parameter(torch.randn(num_control_points))  
+        self.knots = torch.linspace(0, 1, num_control_points).unsqueeze(-1)  
 
     def forward(self, x):
-        x = x.float().unsqueeze(-1)  # Convert x to float and add feature dimension
-        distances = torch.cdist(x, self.knots, p=2)  # Compute pairwise distances
-        weights = torch.softmax(-distances, dim=-1)  # Compute softmax over control points
-        return torch.matmul(weights, self.control_points)  # Weighted sum
+        x = x.float().unsqueeze(-1)  
+        distances = torch.cdist(x, self.knots, p=2)  
+        weights = torch.softmax(-distances, dim=-1)  
+        return torch.matmul(weights, self.control_points)  
 
 
 class ContinuousPositionalEmbedding(nn.Module):
