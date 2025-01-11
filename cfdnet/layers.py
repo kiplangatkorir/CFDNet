@@ -1,58 +1,49 @@
 import torch
 import torch.nn as nn
 
-class DecompositionBlock(nn.Module):
-    def __init__(self, d_model, num_channels):
-        """
-        A decomposition block that uses univariate transformations to process input.
-
-        Args:
-            d_model (int): Dimension of the input embeddings.
-            num_channels (int): Number of decomposition channels.
-        """
-        super(DecompositionBlock, self).__init__()
-        self.num_channels = num_channels
-
-        # Learnable univariate transformations (ψ_ij)
-        self.univariate_transforms = nn.ModuleList([
-            nn.Linear(d_model // num_channels, d_model // num_channels) for _ in range(num_channels)
-        ])
-
-        # Learnable mixing functions (θ_k)
-        self.mixing_functions = nn.Linear(d_model, d_model)
-
-        # Layer normalization
-        self.layer_norm = nn.LayerNorm(d_model)
+# Spline Function Parameterization
+class SplineFunction(nn.Module):
+    def __init__(self, num_control_points):
+        super(SplineFunction, self).__init__()
+        self.control_points = nn.Parameter(torch.randn(num_control_points))  # Learnable control points
+        self.knots = torch.linspace(0, 1, num_control_points).unsqueeze(-1)
 
     def forward(self, x):
-        """
-        Forward pass through the decomposition block.
+        x = x.unsqueeze(-1)  # Reshape input
+        distances = torch.cdist(x, self.knots, p=2)  # Compute distances to knots
+        weights = torch.softmax(-distances, dim=-1)  # Softmax over control points
+        return torch.matmul(weights, self.control_points)  # Weighted sum of control points
 
-        Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, seq_len, d_model).
+# Continuous Positional Embedding
+class ContinuousPositionalEmbedding(nn.Module):
+    def __init__(self, d_model, num_control_points=10):
+        super(ContinuousPositionalEmbedding, self).__init__()
+        self.spline_function = SplineFunction(num_control_points)  # Use the spline function for continuous embeddings
+        self.linear = nn.Linear(1, d_model)  # Linear layer to project to embedding space
 
-        Returns:
-            torch.Tensor: Processed tensor of the same shape as input.
-        """
-        batch_size, seq_len, d_model = x.size()
-        assert d_model % self.num_channels == 0, "d_model must be divisible by num_channels"
+    def forward(self, positions):
+        positions = positions.unsqueeze(-1)  # Add feature dimension
+        embeddings = self.spline_function(positions)  # Get embeddings from spline
+        return self.linear(embeddings)  # Project to the desired embedding dimension
 
-        # Split the input into `num_channels`
-        split_size = d_model // self.num_channels
-        channels = torch.split(x, split_size, dim=-1)  # List of tensors for each channel
+# Decomposition Block
+class DecompositionBlock(nn.Module):
+    def __init__(self, d_model, num_channels=4):
+        super(DecompositionBlock, self).__init__()
+        self.num_channels = num_channels
+        self.psi = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(d_model, d_model),
+                nn.GELU()
+            ) for _ in range(num_channels)
+        ])  # Univariate transformations (per channel)
+        self.theta = nn.Sequential(
+            nn.Linear(num_channels * d_model, d_model),  # Learnable mixing
+            nn.LayerNorm(d_model)
+        )
 
-        # Apply univariate transformations (ψ_ij)
-        transformed_channels = [
-            transform(channel) for transform, channel in zip(self.univariate_transforms, channels)
-        ]
-
-        # Concatenate transformed channels
-        recomposed = torch.cat(transformed_channels, dim=-1)  # Shape: (batch_size, seq_len, d_model)
-
-        # Apply mixing functions (θ_k)
-        mixed = self.mixing_functions(recomposed)  # Shape: (batch_size, seq_len, d_model)
-
-        # Add residual connection and layer normalization
-        output = self.layer_norm(x + mixed)
-
-        return output
+    def forward(self, x):
+        # Apply transformations and combine them
+        transformed = [psi(x) for psi in self.psi]
+        combined = torch.cat(transformed, dim=-1)  # Concatenate along the feature dimension
+        return self.theta(combined)  # Apply learnable mixing and normalization

@@ -1,46 +1,34 @@
 import torch
-import torch.nn as nn
 
-class PositionalEmbedding(nn.Module):
-    def __init__(self, max_seq_len, d_model):
-        """
-        Positional embedding using learnable cubic splines.
+def save_model(model, filepath):
+    """Saves the model weights."""
+    torch.save(model.state_dict(), filepath)
 
-        Args:
-            max_seq_len (int): Maximum sequence length.
-            d_model (int): Dimension of the embeddings.
-        """
-        super(PositionalEmbedding, self).__init__()
-        self.max_seq_len = max_seq_len
-        self.d_model = d_model
+def load_model(model_class, filepath, *model_args):
+    """Loads model weights into a model."""
+    model = model_class(*model_args)
+    model.load_state_dict(torch.load(filepath))
+    return model
 
-        # Learnable spline control points for each position dimension
-        # Shape: (max_seq_len, d_model)
-        self.control_points = nn.Parameter(torch.randn(max_seq_len, d_model))
+def generate_positional_encodings(seq_len, d_model):
+    """Generates sinusoidal positional encodings."""
+    position = torch.arange(seq_len).unsqueeze(1).float()
+    div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-torch.log(torch.tensor(10000.0)) / d_model))
+    pe = torch.zeros(seq_len, d_model)
+    pe[:, 0::2] = torch.sin(position * div_term)
+    pe[:, 1::2] = torch.cos(position * div_term)
+    return pe
 
-        # Layer normalization for better gradient flow
-        self.layer_norm = nn.LayerNorm(d_model)
+def visualize_embeddings(embeddings, labels=None):
+    """Visualizes embeddings in 2D using PCA or t-SNE."""
+    from sklearn.decomposition import PCA
+    from sklearn.manifold import TSNE
+    import matplotlib.pyplot as plt
 
-    def forward(self, x):
-        """
-        Forward pass for positional embedding.
+    reduced_embeddings = PCA(n_components=2).fit_transform(embeddings.cpu().detach().numpy())
 
-        Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, seq_len).
-
-        Returns:
-            torch.Tensor: Positional embeddings of shape (batch_size, seq_len, d_model).
-        """
-        batch_size, seq_len = x.size()
-        assert seq_len <= self.max_seq_len, "Sequence length exceeds max_seq_len"
-
-        # Retrieve positional embeddings for the given sequence length
-        pos_emb = self.control_points[:seq_len]  # Shape: (seq_len, d_model)
-
-        # Expand embeddings to match batch size
-        pos_emb = pos_emb.unsqueeze(0).expand(batch_size, -1, -1)  # Shape: (batch_size, seq_len, d_model)
-
-        # Normalize embeddings
-        pos_emb = self.layer_norm(pos_emb)
-
-        return pos_emb
+    plt.figure(figsize=(8, 6))
+    plt.scatter(reduced_embeddings[:, 0], reduced_embeddings[:, 1], c=labels if labels is not None else 'b', cmap='rainbow')
+    plt.colorbar()
+    plt.title('Embedding Visualization')
+    plt.show()
