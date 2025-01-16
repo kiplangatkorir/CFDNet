@@ -73,37 +73,28 @@ class DecompositionBlock(nn.Module):
         self.num_heads = num_heads
         self.num_functions = num_functions
         
-        # Multi-head attention layer
         self.attention = nn.MultiheadAttention(d_model, num_heads)
         
-        # Univariate transformation functions
         self.psi_functions = nn.ModuleList([AdaptiveUnivariateFunction() for _ in range(num_functions)])
         
-        # GLU gating mechanism
         self.gate = nn.Sequential(
             nn.Linear(d_model, d_model * 2),
             nn.GLU(),
             nn.LayerNorm(d_model)
         )
         
-        # Learnable projection matrices
         self.input_projection = nn.Linear(d_model, num_functions)
         self.output_projection = nn.Linear(d_model, d_model)
         
     def forward(self, x):
-        # Multi-head attention
         attn_output, _ = self.attention(x, x, x)
         
-        # Project input to function space
         projected = self.input_projection(x)
         
-        # Apply univariate transformations
         transformed = torch.stack([f(projected[..., i]) for i, f in enumerate(self.psi_functions)], dim=-1)
         
-        # Apply GLU gating
         gated_output = self.gate(transformed)
         
-        # Final projection with skip connection
         return x + attn_output + self.output_projection(gated_output)
 
 
@@ -115,17 +106,13 @@ class CFDNet(nn.Module):
         self.embedding = nn.Embedding(vocab_size, d_model)
         self.embedding_scale = np.sqrt(d_model)
         
-        # Enhanced positional encoding
         self.positional_encoding = DynamicPositionalEncoding(d_model)
         
-        # Decomposition layers with dropout
         self.layers = nn.ModuleList([DecompositionBlock(d_model, num_functions=num_functions) for _ in range(num_layers)])
         self.dropout = nn.Dropout(dropout)
         
-        # Output projection
         self.output_layer = nn.Linear(d_model, vocab_size)
         
-        # Initialize parameters
         self._init_parameters()
         
     def _init_parameters(self):
@@ -135,21 +122,17 @@ class CFDNet(nn.Module):
                 nn.init.xavier_uniform_(p)
                 
     def forward(self, x, mask=None):
-        # Embed and scale tokens
         x = self.embedding(x) * self.embedding_scale
         x = self.positional_encoding(x)
         
-        # Apply mask if provided
         if mask is not None:
             x = x.masked_fill(mask.unsqueeze(-1), 0)
         
-        # Pass through decomposition layers
         residual = x
         for layer in self.layers:
             x = self.dropout(layer(x)) + residual
-            residual = x  # Residual for next layer
+            residual = x  
                 
-        # Project to vocabulary
         output = self.output_layer(x)
         return F.log_softmax(output, dim=-1)
 
