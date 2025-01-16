@@ -18,6 +18,6 @@ class PDESolver(nn.Module):
         """
         Forward pass for PDE solving.
         """
-        x = self.cfdnet(x)  # Process grid data or similar inputs
+        x = self.cfdnet(x)  
         solution = self.output_layer(x)
         return solution
