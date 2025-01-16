@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from cfdnet.layers import ContinuousPositionalEmbedding, DecompositionBlock
+from cfdnet.core.univariate_functions import ContinuousPositionalEmbedding, DecompositionBlock
 
 class CFDNet(nn.Module):
     def __init__(self, vocab_size, d_model, num_layers, max_seq_len, num_control_points=10):
