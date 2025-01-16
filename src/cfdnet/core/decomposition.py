@@ -3,7 +3,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import torch
 import torch.nn as nn
-from .univariate_functions import AdaptiveUnivariateFunction
+from core.univariate_functions import AdaptiveUnivariateFunction
 
 class DecompositionBlock(nn.Module):
     def __init__(self, d_model, num_functions=8):

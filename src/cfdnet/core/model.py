@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from .positional_encoding import CubicSplinePositionalEncoding
-from .decomposition import DecompositionBlock
+from core.positional_encoding import CubicSplinePositionalEncoding
+from core.decomposition import DecompositionBlock
 
 class CFDNet(nn.Module):
     def __init__(self, vocab_size, d_model, num_layers, max_seq_len, num_functions=8, dropout=0.1):
