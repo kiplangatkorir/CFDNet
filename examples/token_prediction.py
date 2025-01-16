@@ -15,12 +15,11 @@ model = cf.CFDNet(vocab_size, d_model, num_layers, max_seq_len)
 # Example input sequence (batch size: 2, sequence length: 256)
 input_seq = torch.randint(0, vocab_size, (2, 256))
 
-# Create a padding mask where 0 indicates padding
-pad_idx = 0
-mask = cf.create_pad_mask(input_seq, pad_idx)
+# Get the model's output (log softmax probabilities)
+output = model(input_seq)
 
-# Get the model's output
-output = model(input_seq, mask=mask)
+# Apply softmax to get token probabilities (if needed)
+token_probs = torch.exp(output)  # Converts log-softmax to probabilities
 
-# Print the shape of the output
-print("Output shape with mask:", output.size())  # Should print torch.Size([2, 256, 5000])
+# Print token probabilities for the first token in the first sequence
+print("Token probabilities for first token:", token_probs[0, 0, :])
