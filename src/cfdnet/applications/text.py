@@ -4,7 +4,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from core.model import CFDNet
 class TextClassification(nn.Module):
     """
     A wrapper for text classification tasks using CFDNet.
@@ -18,6 +18,6 @@ class TextClassification(nn.Module):
         """
         Forward pass for text classification.
         """
-        x = self.cfdnet(x, mask)  # Use CFDNet as feature extractor
-        logits = self.classifier(x[:, 0, :])  # Classify based on [CLS] token
+        x = self.cfdnet(x, mask)  
+        logits = self.classifier(x[:, 0, :])  
         return F.log_softmax(logits, dim=-1)
