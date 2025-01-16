@@ -3,7 +3,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import torch
 import torch.nn as nn
-from cfdnet.models import CFDNet
+from cfdnet.core.models import CFDNet
 from cfdnet.utils import save_model, load_model
 
 # Model configuration
