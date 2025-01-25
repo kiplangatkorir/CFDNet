@@ -42,8 +42,7 @@ class DynamicPositionalEncoding(nn.Module):
     def __init__(self, d_model):
         super().__init__()
         self.d_model = d_model
-        self.positional_embedding = nn.Parameter(torch.randn(1, 1024, d_model))  # Up to 1024 tokens
-        
+        self.positional_embedding = nn.Parameter(torch.randn(1, 1024, d_model))  
     def forward(self, x):
         seq_len = x.size(1)
         pos_encodings = self.positional_embedding[:, :seq_len, :]
@@ -102,44 +101,55 @@ class DecompositionBlock(nn.Module):
 
 
 class CFDNet(nn.Module):
-    """Enhanced Continuous Function Decomposition Network with multi-head attention, GLU, and residuals."""
-    def __init__(self, vocab_size, d_model, num_layers, max_seq_len, num_functions=8, dropout=0.1):
+    """Enhanced Continuous Function Decomposition Network."""
+    def __init__(self, vocab_size, d_model, num_layers, max_seq_len, 
+                 num_functions=8, dropout=0.1):
         super().__init__()
         self.d_model = d_model
+        
         self.embedding = nn.Embedding(vocab_size, d_model)
         self.embedding_scale = np.sqrt(d_model)
         
-        self.positional_encoding = DynamicPositionalEncoding(d_model)
+        self.positional_encoding = CubicSplinePositionalEncoding(
+            max_seq_len, d_model
+        )
         
-        self.layers = nn.ModuleList([DecompositionBlock(d_model, num_functions=num_functions) for _ in range(num_layers)])
+        self.layers = nn.ModuleList([DecompositionBlock(d_model, num_functions) for _ in range(num_layers)])
         self.dropout = nn.Dropout(dropout)
         
         self.output_layer = nn.Linear(d_model, vocab_size)
         
         self._init_parameters()
-        
+
     def _init_parameters(self):
         """Initialize network parameters."""
         for p in self.parameters():
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
                 
-    def forward(self, x, mask=None):
-        x = self.embedding(x) * self.embedding_scale
-        x = self.positional_encoding(x)
-        
+def forward(self, x, mask=None):
+    x = self.embedding(x) * self.embedding_scale
+    
+    x = self.positional_encoding(x)
+    
+    if x.dim() == 4:
+        print(f"Reshaping x from 4D to 3D: {x.shape}")
+        x = x.view(x.size(0), x.size(1), -1)  
+    print(f"x shape after reshaping: {x.shape}")
+    
+    if mask is not None:
+        x = x.masked_fill(mask.unsqueeze(-1), 0)  
+    
+    for layer in self.layers:
+        x = self.dropout(layer(x))
         if mask is not None:
             x = x.masked_fill(mask.unsqueeze(-1), 0)
-        
-        residual = x
-        for layer in self.layers:
-            x = self.dropout(layer(x)) + residual
-            residual = x  
-                
-        output = self.output_layer(x)
-        return F.log_softmax(output, dim=-1)
+    
+    output = self.output_layer(x)
+    return F.log_softmax(output, dim=-1)
+
 
 
 def create_pad_mask(seq, pad_idx):
     """Create padding mask."""
-    return (seq == pad_idx).unsqueeze(-2)
+    return (seq == pad_idx).unsqueeze(-2)  
