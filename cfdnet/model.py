@@ -120,6 +120,29 @@ class DecompositionBlock(nn.Module):
         
         return x + attn_output + output
 
+class CFDNetScheduler:
+    def __init__(self, optimizer, d_model, warmup_steps=4000, factor=1.0):
+        self.optimizer = optimizer
+        self.d_model = d_model
+        self.warmup_steps = warmup_steps
+        self.factor = factor
+        self._step = 0
+        self._rate = 0
+        
+    def step(self):
+        self._step += 1
+        rate = self.compute_rate()
+        for p in self.optimizer.param_groups:
+            p['lr'] = rate
+        self._rate = rate
+        
+    def compute_rate(self):
+        step = self._step
+        factor = self.factor
+        d_model = self.d_model
+        warmup = self.warmup_steps
+        return factor * (d_model ** (-0.5) * min(step ** (-0.5), step * warmup ** (-1.5)))
+
 class CFDNet(nn.Module):
     def __init__(self, vocab_size, d_model, num_layers, max_seq_len, 
                  num_functions=8, dropout=0.1):
@@ -132,7 +155,6 @@ class CFDNet(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.output_layer = nn.Linear(d_model, vocab_size)
         
-        # Initialize optimizer and scheduler as None
         self.optimizer = None
         self.scheduler = None
         
@@ -144,7 +166,6 @@ class CFDNet(nn.Module):
                 nn.init.xavier_uniform_(p)
     
     def configure_optimizer(self, warmup_steps=4000, factor=1.0):
-        """Initialize optimizer and scheduler"""
         self.optimizer = torch.optim.Adam(self.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9)
         self.scheduler = CFDNetScheduler(self.optimizer, self.d_model, warmup_steps, factor)
         return self.optimizer, self.scheduler
