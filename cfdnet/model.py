@@ -121,52 +121,53 @@ class DecompositionBlock(nn.Module):
         return x + attn_output + output
 
 class CFDNet(nn.Module):
-    """Enhanced Continuous Function Decomposition Network."""
     def __init__(self, vocab_size, d_model, num_layers, max_seq_len, 
                  num_functions=8, dropout=0.1):
         super().__init__()
         self.d_model = d_model
-        
         self.embedding = nn.Embedding(vocab_size, d_model)
         self.embedding_scale = np.sqrt(d_model)
-        
-        self.positional_encoding = CubicSplinePositionalEncoding(
-            max_seq_len, d_model
-        )
-        
+        self.positional_encoding = CubicSplinePositionalEncoding(max_seq_len, d_model)
         self.layers = nn.ModuleList([DecompositionBlock(d_model, num_functions) for _ in range(num_layers)])
         self.dropout = nn.Dropout(dropout)
-        
         self.output_layer = nn.Linear(d_model, vocab_size)
+        
+        # Initialize optimizer and scheduler as None
+        self.optimizer = None
+        self.scheduler = None
         
         self._init_parameters()
 
     def _init_parameters(self):
-        """Initialize network parameters."""
         for p in self.parameters():
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
+    
+    def configure_optimizer(self, warmup_steps=4000, factor=1.0):
+        """Initialize optimizer and scheduler"""
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9)
+        self.scheduler = CFDNetScheduler(self.optimizer, self.d_model, warmup_steps, factor)
+        return self.optimizer, self.scheduler
                 
-def forward(self, x, mask=None):
-    x = self.embedding(x) * self.embedding_scale
-    
-    x = self.positional_encoding(x)
-    
-    if x.dim() == 4:
-        print(f"Reshaping x from 4D to 3D: {x.shape}")
-        x = x.view(x.size(0), x.size(1), -1)  
-    print(f"x shape after reshaping: {x.shape}")
-    
-    if mask is not None:
-        x = x.masked_fill(mask.unsqueeze(-1), 0)  
-    
-    for layer in self.layers:
-        x = self.dropout(layer(x))
+    def forward(self, x, mask=None):
+        x = self.embedding(x) * self.embedding_scale
+        x = self.positional_encoding(x)
+        
+        if x.dim() == 4:
+            print(f"Reshaping x from 4D to 3D: {x.shape}")
+            x = x.view(x.size(0), x.size(1), -1)  
+        print(f"x shape after reshaping: {x.shape}")
+        
         if mask is not None:
-            x = x.masked_fill(mask.unsqueeze(-1), 0)
-    
-    output = self.output_layer(x)
-    return F.log_softmax(output, dim=-1)
+            x = x.masked_fill(mask.unsqueeze(-1), 0)  
+        
+        for layer in self.layers:
+            x = self.dropout(layer(x))
+            if mask is not None:
+                x = x.masked_fill(mask.unsqueeze(-1), 0)
+        
+        output = self.output_layer(x)
+        return F.log_softmax(output, dim=-1)
 
 
 
