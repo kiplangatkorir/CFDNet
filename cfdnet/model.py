@@ -68,7 +68,6 @@ class AdaptiveUnivariateFunction(nn.Module):
 
 
 class DecompositionBlock(nn.Module):
-    """Decomposition block with multi-head attention, GLU gating, and residual connections."""
     def __init__(self, d_model, num_heads=8, num_functions=8):
         super().__init__()
         self.d_model = d_model
@@ -76,29 +75,50 @@ class DecompositionBlock(nn.Module):
         self.num_functions = num_functions
         
         self.attention = nn.MultiheadAttention(d_model, num_heads)
+        self.attention_norm = nn.BatchNorm1d(d_model)
         
         self.psi_functions = nn.ModuleList([AdaptiveUnivariateFunction() for _ in range(num_functions)])
         
         self.gate = nn.Sequential(
-            nn.Linear(num_functions, d_model * 2),  
+            nn.Linear(num_functions, d_model * 2),
+            nn.BatchNorm1d(d_model * 2),
             nn.GLU(),
             nn.LayerNorm(d_model)
         )
         
         self.input_projection = nn.Linear(d_model, num_functions)
+        self.projection_norm = nn.BatchNorm1d(num_functions)
+        
         self.output_projection = nn.Linear(d_model, d_model)
+        self.output_norm = nn.BatchNorm1d(d_model)
         
     def forward(self, x):
+        # Reshape for batch norm
+        batch_size, seq_len, d_model = x.shape
+        
+        # Attention with batch norm
         attn_output, _ = self.attention(x, x, x)
+        attn_output = attn_output.transpose(1, 2)
+        attn_output = self.attention_norm(attn_output)
+        attn_output = attn_output.transpose(1, 2)
         
+        # Projection with batch norm
         projected = self.input_projection(x)
+        projected = projected.transpose(1, 2)
+        projected = self.projection_norm(projected)
+        projected = projected.transpose(1, 2)
         
+        # Transform and gate
         transformed = torch.stack([f(projected[..., i]) for i, f in enumerate(self.psi_functions)], dim=-1)
-        
         gated_output = self.gate(transformed)
         
-        return x + attn_output + self.output_projection(gated_output)
-
+        # Output projection with batch norm
+        output = self.output_projection(gated_output)
+        output = output.transpose(1, 2)
+        output = self.output_norm(output)
+        output = output.transpose(1, 2)
+        
+        return x + attn_output + output
 
 class CFDNet(nn.Module):
     """Enhanced Continuous Function Decomposition Network."""
